@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Irrigation System | Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Firebase App & Database Compat SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen p-4 md:p-8">
+  <div class="max-w-6xl mx-auto space-y-6">
+
+    <!-- Top Bar -->
+    <header class="flex flex-col md:flex-row justify-between items-center bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-xl">
+      <div class="flex items-center space-x-4">
+        <div class="p-3 bg-emerald-500/10 text-emerald-400 rounded-xl text-2xl">
+          <i class="fa-solid fa-seedling"></i>
+        </div>
+        <div>
+          <h1 class="text-2xl font-bold text-white tracking-wide">Smart Irrigation & Water Quality System</h1>
+          <p class="text-sm text-slate-400">Soil moisture monitoring, TDS water salinity interlock, and AI analytics</p>
+        </div>
+      </div>
+      <div class="mt-4 md:mt-0 flex items-center space-x-3">
+        <div id="pumpStatusBadge" class="px-4 py-2 rounded-full font-bold text-sm bg-slate-800 border border-slate-700 text-slate-400 flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-slate-500"></span>
+          Pump: Idle
+        </div>
+      </div>
+    </header>
+
+    <!-- Alert Banner (shown when triggered) -->
+    <div id="alertBanner" class="hidden p-4 rounded-xl border border-rose-500/30 bg-rose-950/40 text-rose-300 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <i class="fa-solid fa-triangle-exclamation text-rose-400 text-xl"></i>
+        <span id="alertMessage" class="text-sm font-semibold">Important Alert!</span>
+      </div>
+      <button onclick="document.getElementById('alertBanner').classList.add('hidden')" class="text-rose-400 hover:text-white">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <!-- Live Telemetry Grid (4 Cards) -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <!-- Soil Moisture -->
+      <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-lg relative overflow-hidden">
+        <div class="flex justify-between items-center text-slate-400">
+          <span class="font-semibold text-xs uppercase tracking-wider">Soil Moisture</span>
+          <i class="fa-solid fa-droplet text-sky-400 text-lg"></i>
+        </div>
+        <div class="text-3xl font-extrabold mt-2 text-sky-400" id="soilVal">--%</div>
+        <p class="text-xs text-slate-400 mt-1">Water Sensor (GPIO35)</p>
+        <div class="w-full bg-slate-800 h-2 rounded-full mt-3 overflow-hidden">
+          <div id="soilBar" class="bg-sky-400 h-full w-0 transition-all duration-700 rounded-full"></div>
+        </div>
+      </div>
+
+      <!-- Water Salinity (TDS) -->
+      <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-lg relative overflow-hidden">
+        <div class="flex justify-between items-center text-slate-400">
+          <span class="font-semibold text-xs uppercase tracking-wider">Water Salinity (TDS)</span>
+          <i class="fa-solid fa-flask-vial text-cyan-400 text-lg"></i>
+        </div>
+        <div class="text-3xl font-extrabold mt-2 text-cyan-400" id="tdsVal">-- ppm</div>
+        <div class="mt-2 text-xs flex items-center justify-between">
+          <span id="tdsBadge" class="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800">Safe</span>
+          <span class="text-slate-500">GPIO33</span>
+        </div>
+      </div>
+
+      <!-- Temperature -->
+      <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-lg">
+        <div class="flex justify-between items-center text-slate-400">
+          <span class="font-semibold text-xs uppercase tracking-wider">Temperature</span>
+          <i class="fa-solid fa-temperature-half text-amber-400 text-lg"></i>
+        </div>
+        <div class="text-3xl font-extrabold mt-2 text-amber-400" id="tempVal">--°C</div>
+        <p class="text-xs text-slate-400 mt-1">DHT22 (GPIO4)</p>
+      </div>
+
+      <!-- Air Humidity -->
+      <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-lg">
+        <div class="flex justify-between items-center text-slate-400">
+          <span class="font-semibold text-xs uppercase tracking-wider">Air Humidity</span>
+          <i class="fa-solid fa-cloud text-teal-400 text-lg"></i>
+        </div>
+        <div class="text-3xl font-extrabold mt-2 text-teal-400" id="humVal">--%</div>
+        <p class="text-xs text-slate-400 mt-1">Relative Humidity</p>
+      </div>
+    </div>
+
+    <!-- Control & Interlock Panel -->
+    <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-lg space-y-6">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+        <h2 class="text-lg font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-sliders text-emerald-400"></i>
+          <span>Irrigation Control & Safety</span>
+        </h2>
+        <span class="text-xs bg-slate-800 text-emerald-400 px-3 py-1 rounded-full border border-slate-700">TDS Protection Active</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+        <!-- Manual Pump Switch -->
+        <div class="p-5 bg-slate-950/60 border border-slate-800 rounded-xl flex flex-col justify-between">
+          <div>
+            <span class="text-slate-300 font-semibold text-sm block">Manual Irrigation Switch</span>
+            <span class="text-xs text-slate-500 mt-1 block">Instantly start or stop the water pump</span>
+          </div>
+          <button id="manualPumpBtn" class="mt-4 w-full py-2.5 px-4 rounded-xl font-bold text-sm text-white bg-emerald-600 hover:bg-emerald-500 transition">
+            Start Watering ▶️
+          </button>
+        </div>
+
+        <!-- Salinity Interlock Info -->
+        <div class="p-5 bg-slate-950/60 border border-slate-800 rounded-xl flex flex-col justify-between">
+          <div class="flex justify-between items-center">
+            <span class="text-slate-300 font-semibold text-sm">Salinity Safety Lockout</span>
+            <span class="text-rose-400 font-bold text-sm">1,200 ppm</span>
+          </div>
+          <p class="text-xs text-slate-400 mt-2">
+            If reservoir salinity exceeds 1,200 ppm, irrigation is automatically disabled to protect plant roots from toxicity.
+          </p>
+          <div class="mt-3 text-xs text-slate-500 flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-emerald-400"></span> 0–800 ppm: Safe
+            <span class="w-2 h-2 rounded-full bg-rose-400 ml-2"></span> &gt;1200: Lockout
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Analytics Chart -->
+    <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-lg">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-chart-line text-sky-400"></i>
+          <span>Live Telemetry & Historical Trends</span>
+        </h2>
+        <span class="text-xs text-slate-400">Soil Moisture (%) & Water TDS (ppm / 10)</span>
+      </div>
+      <div class="h-72 w-full">
+        <canvas id="analyticsChart"></canvas>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      databaseURL: "https://abdalrhman-mostafa-default-rtdb.firebaseio.com",
+      projectId: "abdalrhman-mostafa"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // Chart.js Setup
+    const ctx = document.getElementById('analyticsChart').getContext('2d');
+    const chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: 'Soil Moisture (%)',
+            borderColor: '#38bdf8',
+            backgroundColor: 'rgba(56, 189, 248, 0.1)',
+            data: [],
+            tension: 0.35
+          },
+          {
+            label: 'Water TDS (ppm ÷ 10)',
+            borderColor: '#22d3ee',
+            backgroundColor: 'rgba(34, 211, 238, 0.1)',
+            data: [],
+            tension: 0.35
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { grid: { color: '#1e293b' }, ticks: { color: '#94a3b8' } },
+          y: { grid: { color: '#1e293b' }, ticks: { color: '#94a3b8' } }
+        },
+        plugins: {
+          legend: { labels: { color: '#cbd5e1', font: { family: 'Inter' } } }
+        }
+      }
+    });
+
+    // Synchronize Live Telemetry
+    db.ref('live').on('value', snap => {
+      const data = snap.val();
+      if (!data) return;
+
+      document.getElementById('soilVal').innerText = `${Math.round(data.soilMoisture)}%`;
+      document.getElementById('soilBar').style.width = `${Math.min(100, Math.max(0, data.soilMoisture))}%`;
+      document.getElementById('tempVal').innerText = `${data.temperature.toFixed(1)}°C`;
+      document.getElementById('humVal').innerText = `${Math.round(data.humidity)}%`;
+
+      // TDS Value & Badge
+      const tds = data.tds || 0;
+      document.getElementById('tdsVal').innerText = `${Math.round(tds)} ppm`;
+      const tdsBadge = document.getElementById('tdsBadge');
+      if (tds > 1200) {
+        tdsBadge.innerText = 'Hazard 🚨';
+        tdsBadge.className = 'px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-950 text-rose-400 border border-rose-800';
+      } else if (tds > 600) {
+        tdsBadge.innerText = 'Nutrient Rich 🌿';
+        tdsBadge.className = 'px-2 py-0.5 rounded text-[11px] font-semibold bg-sky-950 text-sky-400 border border-sky-800';
+      } else {
+        tdsBadge.innerText = 'Safe ✅';
+        tdsBadge.className = 'px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800';
+      }
+
+      // Pump Status Badge
+      const badge = document.getElementById('pumpStatusBadge');
+      if (data.pumpActive) {
+        badge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span> Pump: Running 💧`;
+        badge.className = "px-4 py-2 rounded-full font-bold text-sm bg-emerald-950/60 border border-emerald-500/50 text-emerald-300 flex items-center gap-2";
+      } else {
+        badge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-slate-500"></span> Pump: Idle`;
+        badge.className = "px-4 py-2 rounded-full font-bold text-sm bg-slate-800 border border-slate-700 text-slate-400 flex items-center gap-2";
+      }
+    });
+
+    // Manual Pump Button
+    let currentPump = false;
+    document.getElementById('manualPumpBtn').onclick = () => {
+      currentPump = !currentPump;
+      db.ref('control/manualPump').set(currentPump);
+      document.getElementById('manualPumpBtn').innerText = currentPump ? 'Stop Watering ⏹️' : 'Start Watering ▶️';
+      document.getElementById('manualPumpBtn').className = currentPump 
+        ? 'mt-4 w-full py-2.5 px-4 rounded-xl font-bold text-sm text-white bg-rose-600 hover:bg-rose-500 transition'
+        : 'mt-4 w-full py-2.5 px-4 rounded-xl font-bold text-sm text-white bg-emerald-600 hover:bg-emerald-500 transition';
+    };
+  </script>
+</body>
+</html>

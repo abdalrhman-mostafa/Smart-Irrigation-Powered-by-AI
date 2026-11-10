@@ -1,0 +1,29 @@
+{
+  "control": {
+    "autoMode": true,
+    "manualPump": false,
+    "moistureThreshold": 35
+  },
+  "live": {
+    "humidity": 55,
+    "lastUpdated": 1731234000,
+    "pumpActive": false,
+    "soilMoisture": 45,
+    "temperature": 26.5
+  },
+  "history": {
+    "-Init01": {
+      "humidity": 55,
+      "soilMoisture": 45,
+      "temperature": 26.5,
+      "timestamp": 1731234000
+    }
+  },
+  "alerts": {
+    "-InitAlert": {
+      "message": "System initialized and running successfully.",
+      "timestamp": 1731234000,
+      "type": "INFO"
+    }
+  }
+}
